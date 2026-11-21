@@ -89,6 +89,29 @@ aplay -l
 
 USB 声卡建议用 `alsamixer` 将 PCM 采集增益调整到 60%~70%，避免录音削顶导致唤醒词识别率下降。
 
+### 树莓派 USB 声卡配置（UACDemoV1.0）
+
+`config.json` 是运行时生成的配置，包含设备激活凭据（`DEVICE_ID`、`CLIENT_ID`、`WEBSOCKET_ACCESS_TOKEN`、`MQTT_INFO` 等），已被 `.gitignore` 排除，**不要提交到仓库**。部署后请手动确认 `AUDIO_DEVICES` 与声卡实际能力一致：
+
+```json
+"AUDIO_DEVICES": {
+  "input_device_name": "UACDemoV1.0: USB Audio (hw:1,0)",
+  "output_device_name": "UACDemoV1.0: USB Audio (hw:1,0)",
+  "input_sample_rate": 48000,
+  "output_sample_rate": 48000,
+  "input_channels": 1,
+  "output_channels": 2,
+  "opus_output_sample_rate": 24000,
+  "frame_duration": 20
+}
+```
+
+该声卡仅支持 48 kHz：播放 2 声道、录音 1 声道。若 `output_device_name` 保留为 `default`，或采样率/声道数与之不匹配（例如 44100 Hz、128 声道），启动播放流时会出现 `alsa_snd_pcm_start ... failed` 的 XRUN 报错。可用以下命令确认声卡能力：
+
+```bash
+cat /proc/asound/card*/stream0
+```
+
 ## 运行
 
 ```bash
