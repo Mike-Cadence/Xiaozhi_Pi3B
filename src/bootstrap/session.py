@@ -9,6 +9,8 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Protocol
 
+import numpy as np
+
 from src.constants.constants import AbortReason, DeviceState, ListeningMode
 from src.core.event_bus import Events
 from src.logging import get_logger
@@ -506,8 +508,37 @@ class ConversationSession:
         if self.is_speaking():
             await self.abort_speaking(AbortReason.WAKE_WORD_DETECTED)
         else:
-            started = await self.start_auto_conversation()
+            # 唤醒提示音与建立连接并行，播完即进入聆听，不额外增加等待
+            start_task = asyncio.create_task(self.start_auto_conversation())
+            try:
+                await self._play_wake_beep()
+            finally:
+                started = await start_task
             logger.info("唤醒后重新开始对话: %s", started)
+
+    async def _play_wake_beep(self) -> None:
+        """唤醒后播一声短提示音，走通知播放通道，避免另开音频设备."""
+        writer = (
+            getattr(self.audio, "write_notification_pcm", None) if self.audio else None
+        )
+        if writer is None:
+            return
+        audio_config = getattr(self.audio, "audio_config", None)
+        rate = getattr(audio_config, "OUTPUT_SAMPLE_RATE", 24000)
+        duration = 0.14
+        frames = int(rate * duration)
+        t = np.arange(frames, dtype=np.float32) / rate
+        tone = np.sin(2 * np.pi * 880.0 * t).astype(np.float32) * 0.25
+        # 首尾淡入淡出，避免爆音
+        fade_in = np.minimum(1.0, np.arange(frames, dtype=np.float32) / (rate * 0.008))
+        fade_out = np.minimum(
+            1.0, (frames - np.arange(frames, dtype=np.float32)) / (rate * 0.03)
+        )
+        tone *= np.minimum(fade_in, fade_out)
+        try:
+            await writer(tone)
+        except Exception as e:
+            logger.warning("唤醒提示音播放失败: %s", e)
 
     async def abort_speaking(self, reason: str) -> None:
         if self._listen_start_generation == self.audio_generation:
