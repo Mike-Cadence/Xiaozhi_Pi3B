@@ -1,0 +1,3 @@
+# Compatibility installer; dependency versions and extras live in pyproject.toml.
+# Run from the project root: pip install -r requirements.txt
+.[gui]
