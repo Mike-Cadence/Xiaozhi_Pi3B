@@ -1,313 +1,141 @@
-# py-xiaozhi
+# Xiaozhi Pi3B
 
-<p align="center" class="trendshift">
-  <a href="https://trendshift.io/repositories/14130" target="_blank">
-    <img src="https://trendshift.io/api/badge/repositories/14130" alt="Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/>
-  </a>
-</p>
-<p align="center">
-  <a href="https://github.com/huangjunsen0406/py-xiaozhi/releases/latest">
-    <img src="https://img.shields.io/github/v/release/huangjunsen0406/py-xiaozhi?style=flat-square&logo=github&color=blue" alt="Release"/>
-  </a>
-  <a href="https://opensource.org/licenses/MIT">
-    <img src="https://img.shields.io/badge/License-MIT-green.svg?style=flat-square" alt="License: MIT"/>
-  </a>
-  <a href="https://github.com/huangjunsen0406/py-xiaozhi/stargazers">
-    <img src="https://img.shields.io/github/stars/huangjunsen0406/py-xiaozhi?style=flat-square&logo=github" alt="Stars"/>
-  </a>
-  <a href="https://github.com/huangjunsen0406/py-xiaozhi/releases/latest">
-    <img src="https://img.shields.io/github/downloads/huangjunsen0406/py-xiaozhi/total?style=flat-square&logo=github&color=52c41a1&maxAge=86400" alt="Download"/>
-  </a>
-  <a href="https://gitee.com/huang-jun-sen/py-xiaozhi">
-    <img src="https://img.shields.io/badge/Gitee-FF5722?style=flat-square&logo=gitee" alt="Gitee"/>
-  </a>
-  <a href="https://huangjunsen0406.github.io/py-xiaozhi/guide/00_%E6%96%87%E6%A1%A3%E7%9B%AE%E5%BD%95.html">
-    <img alt="Usage Docs" src="https://img.shields.io/badge/Usage Docs-View-blue?labelColor=2d2d2d" />
-  </a>
-  <a href="https://atomgit.com/huangjunsen0406/py-xiaozhi">
-    <img src="./assets/AtomGit.svg" alt="AtomGit" height="20"/>
-  </a>
-</p>
+树莓派 3B 上的小智 AI 语音助手（headless 部署版本）
 
-English | [简体中文](README.zh.md)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE)
 
-## ❤️ Sponsors
+## 项目来源与版权声明
 
-> [Want to appear here?](mailto:95134130@qq.com)
+本项目**拷贝并派生自开源项目 [py-xiaozhi](https://github.com/huangjunsen0406/py-xiaozhi)**，作者 **Junsen**，遵循 MIT License。
 
-<details open>
-<summary>Click to collapse</summary>
+- 原始项目：<https://github.com/huangjunsen0406/py-xiaozhi>
+- 原始版权：Copyright (c) 2025 Junsen
+- 本仓库基于上游 `main` 分支快照（`合并 #333：统一设置生效规则，修复音频重载与 MQTT 会话回收`）做 Raspberry Pi 3B 部署适配与调试，核心代码版权归原作者所有。
+- 依据 MIT 协议，[LICENSE](./LICENSE) 中的版权与许可声明已**完整保留**；任何分发或再修改都必须保留该声明。
+- 本项目为个人适配版本，非上游官方发布。需要完整功能、桌面端或最新特性，请优先使用上游项目。
 
-[**GitDo.net**](https://gitdo.net/)
+## 与上游的主要差异
 
-Thanks to GitDo.net for sponsoring this project! GitDo.net is an AI API aggregation platform — one API Key for **Claude, Gemini, GPT** and other major models. Direct connection, no proxy needed, stable and efficient. An ideal choice for enterprise-grade AI programming. **[Visit GitDo.net](https://gitdo.net/)**
+- 运行环境：Raspberry Pi 3B + 64 位 Raspberry Pi OS Lite，无 GUI、无摄像头、无物理按键。
+- 音频链路：使用一体式 USB 声卡（UACDemoV1.0 类型），显式指定输入/输出设备，采集增益调整到 60%~70% 以避免波形削顶。
+- 日常运行使用 `gpio` 模式无界面启动，保留 `tui` 模式作为维护/配置通道。
+- 启用 AEC（回声消除），支持语音播报过程中直接插话打断。
+- 唤醒链路增加诊断日志（唤醒命中、音频帧中断告警、重连结果），便于排查待命状态唤醒异常。
 
----
+## 功能特性
 
-|                                                                     |                                                                                                                                                                                                                                             |
-| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [**Token能量站**](https://factory.pub/register?aff=3rXc)            | Thanks to Token能量站 (Factory.pub) for sponsoring this project! Providing API relay for **GPT, Grok, Claude** and other major models — stable, reliable, and affordable. **[Register here](https://factory.pub/register?aff=3rXc)**        |
+- 实时语音对话：Opus 编码、异步流式传输，直连小智官方服务端（ASR/LLM/TTS 均在云端）。
+- 离线唤醒词：基于 sherpa-onnx 的本地关键词检测，默认唤醒词「你好小智」。
+- 双协议：WebSocket / MQTT，支持 WSS/TLS 与自动重连。
+- 多种界面模式：GUI（PySide6 + QML）/ TUI / GPIO，适配桌面、无头服务器与嵌入式设备。
+- MCP 工具生态：音乐播放、音量控制、天气等模块化工具服务。
+- 插件化架构：事件驱动的异步设计，支持扩展。
 
-</details>
+## 硬件与系统要求
 
-## About
+- Raspberry Pi 3B（建议使用 64 位 Raspberry Pi OS Lite）
+- USB 声卡或 USB 麦克风/音箱（板载 3.5mm 音频质量较差，不推荐）
+- 可访问互联网（首次启动需完成设备激活）
+- Python 3.10+
 
-py-xiaozhi is a lightweight, cross-platform multi-modal AI interaction framework built on Python's async architecture. It supports real-time voice streaming, vision-language tasks, and IoT device control. Deployable across Windows, macOS, Linux desktops, and ARM embedded platforms (Raspberry Pi, Horizon Robotics RDK, Jetson Nano), it bridges the gap between Large Language Models and physical hardware — out of the box.
-
-> Evolved from the [xiaozhi-esp32](https://github.com/78/xiaozhi-esp32) firmware project. Officially adopted by [D-Robotics (xiaozhi-in-rdk)](https://github.com/D-Robotics/xiaozhi-in-rdk) as an upstream dependency.
-
-## Related Projects
-
-- [xiaozhi-desktop](https://xiaozhi.junsen.online) — Electron desktop client with AEC echo cancellation, Live2D, floating window modes, and Windows / macOS installers
-
-## Demo
-
-- [Bilibili Demo Video](https://www.bilibili.com/video/BV1HmPjeSED2/#reply255921347937)
-
-![Image](./documents/docs/guide/images/系统界面.png)
-
-## Key Features
-
-- **Real-time Voice AI** — Opus codec with auto frame detection (RFC 6716 TOC parsing), async streaming, sub-20ms latency
-- **Multi-modal Vision** — Camera capture + vision-language model integration for image understanding and scene perception
-- **MCP Tool Ecosystem** — Modular JSON-RPC 2.0 tool server: music player, camera, screenshot, app management, weather, volume control
-- **Cross-platform Deployment** — Windows 10+ / macOS 10.15+ / Linux (x86_64 & ARM), optimized for Raspberry Pi and edge boards
-- **Multiple UI Modes** — PySide6 + QML GUI / TUI / GPIO, adapting to desktop, headless server, and embedded environments
-- **Offline Wake Word** — Sherpa-ONNX based on-device keyword spotting with custom wake word support
-- **IoT & Embodied AI Ready** — GPIO interface for robotics control, hardware actuation, and sensor integration
-- **WebSocket / MQTT** — Dual protocol communication with WSS/TLS encrypted transmission and auto-reconnection
-- **Plugin Architecture** — Event-driven async design, clean dependency injection, extensible plugin system
-
-## System Requirements
-
-### Basic Requirements
-
-- **Python Version**: 3.10 - 3.12
-- **Operating System**: Windows 10+, macOS 10.15+, Linux
-- **Audio Devices**: Microphone and speaker devices
-- **Network Connection**: Stable internet connection (for AI services and online features)
-
-### Recommended Configuration
-
-- **Memory**: At least 4GB RAM (8GB+ recommended)
-- **Processor**: Modern CPU with AVX instruction set support
-- **Storage**: At least 2GB available disk space (for model files and cache)
-- **Audio**: Audio devices supporting 16kHz sampling rate
-
-### Optional Feature Requirements
-
-- **Voice Wake-up**: Requires downloading Sherpa-ONNX speech recognition models
-- **Camera Features**: Requires camera device and OpenCV support
-
-## Read This First
-
-- Carefully read [项目文档](https://huangjunsen0406.github.io/py-xiaozhi/) for startup tutorials and file descriptions
-- The main branch has the latest code; manually reinstall pip dependencies after each update to ensure you have new dependencies
-
-[Zero to Xiaozhi Client (Video Tutorial)](https://www.bilibili.com/video/BV1dWQhYEEmq/?vd_source=2065ec11f7577e7107a55bbdc3d12fce)
-
-## Technical Architecture
-
-### Core Architecture Design
-
-- **Event-Driven Architecture**: Based on asyncio asynchronous event loop, supporting high-concurrency processing
-- **Layered Design**: Clear separation of application layer, protocol layer, and UI layer
-- **Dependency Injection**: Component lifecycle managed via bootstrap container
-- **Plugin System**: Audio, UI, MCP tools and other components loaded via plugin system
-
-### Device States
-
-`StateManager` owns `IDLE`, `LISTENING`, `SPEAKING` and `NOTIFYING`;
-`ConversationSession` coordinates transitions. A successful wake/button action enters
-`LISTENING` after the protocol connects and accepts the listen request. TTS moves the
-device to `SPEAKING`; once local playback drains, the session resumes `LISTENING` or
-returns to `IDLE`. Server notifications play in `NOTIFYING` while otherwise idle,
-then return to `IDLE`. Connection establishment belongs to the protocol lifecycle,
-not a separate device state.
-
-### Key Technical Components
-
-- **Audio Processing**: Opus codec, real-time resampling
-- **Speech Recognition**: Sherpa-ONNX offline models, wake word recognition
-- **Protocol Communication**: WebSocket/MQTT dual protocol support, encrypted transmission, auto-reconnection
-- **Configuration System**: Hierarchical configuration, dot notation access, dynamic updates
-
-### Performance Optimization
-
-- **Async First**: Full system asynchronous architecture, avoiding blocking operations
-- **Memory Management**: Smart caching, garbage collection
-- **Audio Optimization**: 5ms low-latency processing, queue management, streaming transmission
-- **Concurrency Control**: Task pool management, semaphore control, thread safety
-
-### Security Mechanisms
-
-- **Encrypted Communication**: WSS/TLS encryption, certificate verification
-- **Device Authentication**: Dual protocol activation, device fingerprint recognition
-- **Access Control**: Tool permission management, API access control
-- **Error Isolation**: Exception isolation, fault recovery, graceful degradation
-
-## Development Guide
-
-### Project Structure
-
-```
-py-xiaozhi/
-├── main.py                     # Application entry point
-├── src/
-│   ├── activation/             # Device activation
-│   ├── audio_codecs/           # Audio codecs
-│   ├── audio_processing/       # Wake word detection
-│   ├── bootstrap/              # Application bootstrap & dependency injection
-│   ├── constants/              # Constants
-│   ├── core/                   # Core infrastructure (event bus, state management, task management, etc.)
-│   ├── logging/                # Logging subsystem
-│   ├── mcp/                    # MCP tool system
-│   │   ├── mcp_server.py       # MCP server
-│   │   └── tools/              # Tool modules (music/camera/screenshot/app/weather/volume)
-│   ├── plugins/                # Plugin system (audio, UI, MCP, wake word, shortcuts)
-│   ├── protocols/              # Communication protocols (WebSocket/MQTT)
-│   ├── ui/                     # User interface
-│   │   ├── gui/                # PySide6 + QML graphical interface
-│   │   ├── tui/                # Textual full-screen terminal interface
-│   │   └── gpio/               # GPIO embedded interface
-│   └── utils/                  # Utility functions
-├── libs/                       # Third-party native libraries
-│   ├── libopus/                # Opus audio codec library
-│   └── webrtc_apm/             # WebRTC audio processing module
-├── models/                     # Wake word models
-├── assets/                     # Static resources
-├── scripts/                    # Auxiliary scripts
-├── documents/                  # VitePress documentation site
-├── pyproject.toml              # Project configuration
-└── build.json                  # Build configuration
-```
-
-### Development Environment Setup
+## 安装
 
 ```bash
-# Clone project
-git clone https://github.com/huangjunsen0406/py-xiaozhi.git
-cd py-xiaozhi
+sudo apt update
+sudo apt install -y python3-venv python3-pip portaudio19-dev libopus0 ffmpeg
 
-# Base install (GPIO mode on Linux)
-uv sync                                    # Recommended (uv users)
-# or: pip install -e .                    # pip users
+git clone https://github.com/Mike-Cadence/Xiaozhi_Pi3B.git
+cd Xiaozhi_Pi3B
 
-# TUI mode (extra: Textual)
-uv sync --extra tui
-# or: pip install -e '.[tui]'
-
-# GUI mode (extra: PySide6 + qasync)
-uv sync --extra gui                        # Recommended (uv users)
-# or: pip install -e '.[gui]'             # pip users
-
-# Full development environment (GUI + TUI + test / packaging tools)
-uv sync --extra gui --extra tui --group dev
-
-# Code formatting
-./format_code.sh
-
-# Run program - GUI mode (default; requires gui extra)
-python main.py
-
-# Run program - TUI mode (requires tui extra)
-python main.py --mode tui
-
-# Specify communication protocol
-python main.py --protocol websocket  # WebSocket (default)
-python main.py --protocol mqtt       # MQTT protocol
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -U pip
+pip install -r requirements.txt
 ```
 
-### Entry points and verification
+说明：
 
-Source checkouts, installed wheels and frozen builds share `src.cli.main(argv=None)`.
-Importing the launcher does not parse arguments, initialize configuration/logging,
-or load Qt/audio. `--help` and invalid arguments exit before runtime initialization.
+- 仓库已包含唤醒词模型（`models/zh`、`models/en`），无需额外下载。
+- `lgpio` 在部分 Python 版本（如 3.13）下可能编译失败。本机无物理按键时可跳过，程序会提示 GPIO 不可用，不影响语音功能。
+- 无 GUI 环境无需安装 PySide6；TUI 模式需要 `textual`。
 
-```bash
-# Installed command (GUI still needs the gui extra)
-xiaozhi --mode tui
-# Equivalent module entry point
-python -m src --mode tui
+## 配置
 
-# Full regression suite, including Qt model tests without a display
-uv run --extra gui --extra tui python -m pytest -q -W error::RuntimeWarning
-
-# Build sdist, then build the wheel from that sdist
-uvx --from build pyproject-build
-# Install the wheel into a temporary venv outside the checkout and verify it
-python scripts/check_wheel.py dist/*.whl
-```
-
-The wheel contains assets, wake-word models and the supplied native libraries under
-`src/_resources`; source and PyInstaller layouts keep their existing resource paths.
-FFmpeg is resolved from the system PATH for wheel installs. The wheel check installs
-only `platformdirs` alongside the wheel to verify entry points and resources; it does
-not exercise audio hardware, GUI rendering or the full runtime dependency set.
-
-PRs and branch pushes run Python tests on 3.10/3.12 and installed-wheel checks on
-Linux, macOS and Windows. Lint gates critical syntax/undefined-name rules across the
-project and all configured rules for the new entry-point/verification code. Existing
-style warnings elsewhere remain a separate cleanup task.
-
-### Core Development Patterns
-
-- **Async First**: Use `async/await` syntax, avoid blocking operations
-- **Error Handling**: Complete exception handling and logging
-- **Configuration Management**: Use `ConfigManager` for unified configuration access
-- **Test-Driven**: Write unit tests to ensure code quality
-
-### Extension Development
-
-- **Add MCP Tools**: Create new tool modules in `src/mcp/tools/` directory
-- **Add Protocols**: Implement `Protocol` abstract base class
-- **Add Plugins**: Extend the plugin system via `src/plugins/`
-
-### State Transition Diagram
+首次启动会进入激活流程，完成后配置保存在：
 
 ```text
-IDLE -- wake/button + protocol ready --> LISTENING
-LISTENING -- TTS starts --> SPEAKING
-SPEAKING -- playback drained --> LISTENING (continue) / IDLE (finish)
-IDLE -- server notification --> NOTIFYING -- playback drained --> IDLE
+~/.local/share/py-xiaozhi/config/config.json
 ```
 
-## Contributing
+可通过环境变量 `XIAOZHI_DATA_DIR` 修改数据目录。
 
-- Start with [CONTRIBUTING.md](./CONTRIBUTING.md) for the repository workflow
-- Chinese version: [CONTRIBUTING_ZH.md](./CONTRIBUTING_ZH.md)
-- Detailed docs: [Contribution Guide](https://huangjunsen0406.github.io/py-xiaozhi/en/contributing)
+常用配置项：
 
-## Maintainer Workflow
+| 配置项 | 说明 |
+| --- | --- |
+| `AUDIO_DEVICES.input_device_name` | 麦克风设备名，留空则自动检测 |
+| `AUDIO_DEVICES.output_device_name` | 扬声器设备名，留空则自动检测 |
+| `WAKE_WORD_OPTIONS.USE_WAKE_WORD` | 是否启用离线唤醒词 |
+| `WAKE_WORD_OPTIONS.WAKE_WORD` | 唤醒词文本，默认「你好小智」 |
+| `AEC_OPTIONS.ENABLED` | 是否启用回声消除（播报中打断需要开启） |
+| `SYSTEM_OPTIONS.NETWORK.WEBSOCKET_URL` | 自定义 WebSocket 服务地址（默认走官方服务） |
 
-- Triage incoming work as `bug`, `feature`, `docs`, `refactor`, or `maintenance`
-- Prefer focused pull requests with clear validation steps and linked context
-- Require docs updates when behavior, configuration, or public APIs change
-- Merge after CI passes and review feedback is resolved
-- Release through the normal release flow; merge does not imply immediate shipping
+查看系统音频设备：
 
-## Community and Support
+```bash
+arecord -l
+aplay -l
+```
 
-### Thanks to the Following Open Source Contributors
->
-> In no particular order
+USB 声卡建议用 `alsamixer` 将 PCM 采集增益调整到 60%~70%，避免录音削顶导致唤醒词识别率下降。
 
-[Xiaoxia](https://github.com/78)
-[zhh827](https://github.com/zhh827)
-[SmartArduino-Li Honggang](https://github.com/SmartArduino)
-[HonestQiao](https://github.com/HonestQiao)
-[vonweller](https://github.com/vonweller)
-[Sun Weigong](https://space.bilibili.com/416954647)
-[isamu2025](https://github.com/isamu2025)
-[Rain120](https://github.com/Rain120)
-[kejily](https://github.com/kejily)
-[Radio bilibili Jun](https://space.bilibili.com/119751)
-[Cyber Intelligence](https://shop115087494.m.taobao.com/?refer=https%3A%2F%2Fm.tb.cn%2F&ut_sk=1.WMelxbgDQWkDAJ1Rq9Pn7DCD_21380790_1757337352472.Copy.shop&suid=0E25E948-651D-46E0-8E89-5C8CB03B4F56&shop_navi=shopindex&sourceType=shop&shareUniqueId=33038752403&un=d22c5ceda82844ab8bd7bab98ffeb263&share_crt_v=1&un_site=0&spm=a2159r.13376460.0.0&sp_tk=dkRKUjRKUWo2ZHY%3D&bc_fl_src=share-1041250486811064-2-1&cpp=1&shareurl=true&short_name=h.SaBKVHytsCKIPNS&bxsign=scdGtSe264e_qkFQBh0rXCkF-Mrb_s6t35EnpVBBU5dsrd-J24c-_rn_PhJiXRk0hg2hjGoAm0L7j2UQg27OIH_6gZkbhKDyLziD2cy4pDf8sC3KmqrF55TXP3USZaPTw_-&app=weixin)
+## 运行
 
-## Project Statistics
+```bash
+# 无界面常驻运行（树莓派推荐）
+python main.py --mode gpio --protocol websocket
 
-[![Star History Chart](https://star-history.dera.page/svg?repos=huangjunsen0406/py-xiaozhi&type=Date)](https://star-history.dera.page/#huangjunsen0406/py-xiaozhi&Date)
+# 全屏终端维护界面
+python main.py --mode tui --protocol websocket
 
-## License
+# 桌面图形界面（需要 PySide6 + qasync）
+python main.py --mode gui
+```
 
-[MIT License](LICENSE)
+首次运行如未激活，请使用 TUI 模式完成激活；激活信息会写入用户配置目录。
+
+### systemd 开机自启（可选）
+
+```ini
+[Unit]
+Description=Xiaozhi Pi3B voice assistant
+After=network-online.target sound.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/Xiaozhi_Pi3B
+ExecStart=/home/pi/Xiaozhi_Pi3B/.venv/bin/python main.py --mode gpio --protocol websocket
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+## 常见问题
+
+- **启动提示找不到音频设备**：在配置中显式填写 `AUDIO_DEVICES.input_device_name` / `output_device_name`，不要只依赖自动检测。
+- **采集波形削顶、唤醒不灵**：降低 USB 声卡采集增益（60%~70%），并确认没有启用系统的自动增益。
+- **播报时无法插话打断**：确认 `AEC_OPTIONS.ENABLED` 为 `true`。
+- **待命状态唤醒异常**：观察日志中的 `唤醒词命中` / `唤醒触发` / `唤醒后重新开始对话` / `唤醒词检测已 N 秒未收到音频帧`，可区分是检测链路、状态机还是网络重连问题。
+- **GPIO 按键不可用**：通常是 `lgpio` 未安装，不影响语音对话；无按键设备可忽略。
+
+## 许可证
+
+本项目遵循 [MIT License](./LICENSE)，原始版权归 **Junsen** 所有（Copyright (c) 2025 Junsen）。
+
+本项目对上游代码的适配修改同样以 MIT 协议发布。使用、修改、分发时请保留 `LICENSE` 文件中的原始版权与许可声明，并注明来源：
+
+> Based on [py-xiaozhi](https://github.com/huangjunsen0406/py-xiaozhi) by Junsen, licensed under the MIT License.
