@@ -54,6 +54,9 @@ class Events:
     # 服务端单向通知字幕（payload: str）
     NOTIFICATION_SUBTITLE = "notification_subtitle"
 
+    # 屏幕显示请求（payload: str）：MCP display_text 工具 → UI（fb 屏幕）
+    DISPLAY_TEXT = "display_text"
+
     # 音乐控制命令（从外部控制 MusicPlayer）
     MUSIC_PAUSE_REQUEST = "music_pause_request"  # 请求暂停（如 TTS）
     MUSIC_RESUME_REQUEST = "music_resume_request"  # 请求恢复

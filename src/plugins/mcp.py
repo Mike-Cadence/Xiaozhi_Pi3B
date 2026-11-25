@@ -55,6 +55,11 @@ class McpPlugin(Plugin):
             register_camera_tools(server.add_tool, camera)
             register_screenshot_tools(server.add_tool, camera)
 
+            # 屏幕显示工具：仅依赖 event_bus，无硬件时也可注册并验证调用链
+            from src.mcp.tools.display import register_display_tools
+
+            register_display_tools(server.add_tool, ctx.event_bus)
+
             server.register_builtin_tools(music_player=self._music_player)
             server.reload_external_plugins(music_player=self._music_player)
         except Exception as e:
