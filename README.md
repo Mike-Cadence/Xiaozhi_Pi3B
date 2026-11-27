@@ -179,7 +179,7 @@ PY
 
 ```bash
 CARD=$(awk '/UACDemoV1.0/{print $1; exit}' /proc/asound/cards)
-amixer -c "$CARD" sset PCM 100%    # 播放音量
+amixer -c "$CARD" sset PCM 95%     # 播放音量，100% 易出现破音
 amixer -c "$CARD" sset Mic 65%     # 采集增益，60~70% 可避免削顶
 sudo alsactl store                 # 持久化，重启后自动恢复
 ```
