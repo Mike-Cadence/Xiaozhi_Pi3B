@@ -27,9 +27,9 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=SystemConstants.APP_DISPLAY_NAME)
     parser.add_argument(
         "--mode",
-        choices=["gui", "tui", "gpio"],
+        choices=["gui", "tui", "gpio", "fb"],
         default="gui",
-        help="运行模式（默认 gui）：gui / tui(全屏终端) / gpio(仅Linux)",
+        help="运行模式（默认 gui）：gui / tui(全屏终端) / gpio(仅Linux) / fb(fbdev 小屏)",
     )
     parser.add_argument(
         "--protocol",

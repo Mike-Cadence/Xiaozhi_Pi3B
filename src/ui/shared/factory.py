@@ -36,6 +36,12 @@ def create_viewport(
             runtime_tool_names=runtime_tool_names,
         )
 
+    if normalized == "fb" and sys.platform == "linux":
+        from src.ui.fb import FbViewManager
+
+        logger.info("create_viewport: fbdev")
+        return FbViewManager(event_bus=event_bus, task_manager=task_manager)
+
     if normalized == "gpio" and sys.platform == "linux":
         from src.ui.gpio import GpioViewManager
 
