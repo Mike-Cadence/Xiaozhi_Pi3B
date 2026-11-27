@@ -43,6 +43,8 @@ class FbDevice:
     """
 
     SYSFS = "/sys/class/graphics/fb0"
+    # 面板倒装时置 True：转换后按像素整体倒序（≈一次 memcpy 的开销）
+    ROTATE_180 = True
 
     def __init__(self, path: str = "/dev/fb0") -> None:
         self._path = path
@@ -161,6 +163,11 @@ class FbDevice:
                 f"shape {w}x{h} != fb {self._info.width}x{self._info.height}"
             )
         raw = self._rgb_to_framebuffer(rgb)
+        if self.ROTATE_180:
+            # 180° 等价于像素整体倒序：按 16/32 位元素反转，代价接近一次 memcpy
+            dtype = "<u2" if self._info.bpp == 16 else "<u4"
+            raw = np.frombuffer(raw, dtype=dtype)[::-1].tobytes()
+
         row_bytes = self._info.width * self._info.bpp // 8
         if self._info.stride == row_bytes:
             self._mmap[:] = raw
