@@ -114,8 +114,8 @@ USB 声卡建议用 `alsamixer` 将 PCM 采集增益调整到 60%~70%，避免�
 
 ```json
 "AUDIO_DEVICES": {
-  "input_device_name": "UACDemoV1.0: USB Audio (hw:1,0)",
-  "output_device_name": "UACDemoV1.0: USB Audio (hw:1,0)",
+  "input_device_name": "UACDemoV1.0",
+  "output_device_name": "UACDemoV1.0",
   "input_sample_rate": 48000,
   "output_sample_rate": 48000,
   "input_channels": 1,
@@ -124,6 +124,8 @@ USB 声卡建议用 `alsamixer` 将 PCM 采集增益调整到 60%~70%，避免�
   "frame_duration": 20
 }
 ```
+
+设备名只写 `UACDemoV1.0`，不要带 `(hw:1,0)` 这样的卡号：代码是模糊匹配，卡号在重启后可能变化，写死会导致「找不到设备」并回退到错误的默认设备。
 
 该声卡仅支持 48 kHz：播放 2 声道、录音 1 声道。若 `output_device_name` 保留为 `default`，或采样率/声道数与之不匹配（例如 44100 Hz、128 声道），启动播放流时会出现 `alsa_snd_pcm_start ... failed` 的 XRUN 报错。可用以下命令确认声卡能力：
 
@@ -155,10 +157,10 @@ d["WAKE_WORD_OPTIONS"].update({
     "KEYWORDS_THRESHOLD": 0.15,
 })
 
-# USB 声卡（UACDemoV1.0）采样率与声道，按实际声卡填写
+# USB 声卡（UACDemoV1.0）采样率与声道，设备名不带卡号，按实际声卡填写
 d["AUDIO_DEVICES"].update({
-    "input_device_name": "UACDemoV1.0: USB Audio (hw:1,0)",
-    "output_device_name": "UACDemoV1.0: USB Audio (hw:1,0)",
+    "input_device_name": "UACDemoV1.0",
+    "output_device_name": "UACDemoV1.0",
     "input_sample_rate": 48000,
     "output_sample_rate": 48000,
     "input_channels": 1,
@@ -208,6 +210,16 @@ python main.py --mode gui
 
 首次运行如未激活，请使用 TUI 模式完成激活；激活信息会写入用户配置目录。
 
+### 启动脚本（树莓派推荐）
+
+USB 声卡可能在程序启动后才完成枚举，导致「程序在运行、界面正常，但麦克风没打开、唤醒无反应」。仓库提供的 `start_pi3b.sh` 会先等待声卡就绪再启动：
+
+```bash
+./start_pi3b.sh
+```
+
+脚本最多等待 30 秒，确认 `/proc/asound/cards` 中出现 `UACDemoV1.0` 后才执行 `main.py --mode fb --protocol websocket`。
+
 ### systemd 开机自启（可选）
 
 ```ini
@@ -218,9 +230,9 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=pi
-WorkingDirectory=/home/pi/Xiaozhi_Pi3B
-ExecStart=/home/pi/Xiaozhi_Pi3B/.venv/bin/python main.py --mode gpio --protocol websocket
+User=mikepi
+WorkingDirectory=/home/mikepi/py-xiaozhi
+ExecStart=/home/mikepi/py-xiaozhi/start_pi3b.sh
 Restart=on-failure
 RestartSec=5
 
@@ -231,6 +243,7 @@ WantedBy=multi-user.target
 ## 常见问题
 
 - **启动提示找不到音频设备**：在配置中显式填写 `AUDIO_DEVICES.input_device_name` / `output_device_name`，不要只依赖自动检测。
+- **程序在运行、界面正常，但唤不醒**：多半是启动时声卡未枚举或卡号变化。检查日志是否有 `未找到设备` / `初始化音频设备失败`，改用 `start_pi3b.sh` 启动，并确认设备名没有写死 `hw:x,y`。
 - **采集波形削顶、唤醒不灵**：降低 USB 声卡采集增益（60%~70%），并确认没有启用系统的自动增益。
 - **播报时无法插话打断**：确认 `AEC_OPTIONS.ENABLED` 为 `true`。
 - **待命状态唤醒异常**：观察日志中的 `唤醒词命中` / `唤醒触发` / `唤醒后重新开始对话` / `唤醒词检测已 N 秒未收到音频帧`，可区分是检测链路、状态机还是网络重连问题。
