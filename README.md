@@ -112,6 +112,62 @@ USB 声卡建议用 `alsamixer` 将 PCM 采集增益调整到 60%~70%，避免�
 cat /proc/asound/card*/stream0
 ```
 
+### 刷机后恢复设备配置
+
+代码本身已在 git 仓库中，刷机后 `git clone` 即可恢复。但以下两类设置保存在设备本地，刷机后会丢失，需要手动重新应用。
+
+**1. 运行时配置 `~/.local/share/py-xiaozhi/config/config.json`**
+
+该文件由激活流程生成，含设备凭据，**不要提交进仓库**。激活完成后，修改其中可公开的参数：
+
+```bash
+CFG=~/.local/share/py-xiaozhi/config/config.json
+cp -p "$CFG" "$CFG.bak"
+python3 - "$CFG" <<'PY'
+import json, sys
+p = sys.argv[1]
+d = json.load(open(p))
+
+# 唤醒词推理线程数：树莓派 3B 设为 1，避免 ONNX 线程过度订阅导致 CPU 打满
+d["WAKE_WORD_OPTIONS"]["NUM_THREADS"] = 1
+
+# USB 声卡（UACDemoV1.0）采样率与声道，按实际声卡填写
+d["AUDIO_DEVICES"].update({
+    "input_device_name": "UACDemoV1.0: USB Audio (hw:1,0)",
+    "output_device_name": "UACDemoV1.0: USB Audio (hw:1,0)",
+    "input_sample_rate": 48000,
+    "output_sample_rate": 48000,
+    "input_channels": 1,
+    "output_channels": 2,
+})
+
+# 需要「播报中直接插话打断」时开启 AEC
+# d["AEC_OPTIONS"]["ENABLED"] = True
+
+json.dump(d, open(p, "w"), ensure_ascii=False, indent=2)
+PY
+```
+
+**2. ALSA 音量（`/var/lib/alsa/asound.state`）**
+
+刷机后声卡音量回到默认（播放 30%、采集 95%），会导致声音偏小、麦克风削顶。刷机后 card 编号可能变化，按声卡名称解析：
+
+```bash
+CARD=$(awk '/UACDemoV1.0/{print $1; exit}' /proc/asound/cards)
+amixer -c "$CARD" sset PCM 100%    # 播放音量
+amixer -c "$CARD" sset Mic 65%     # 采集增益，60~70% 可避免削顶
+sudo alsactl store                 # 持久化，重启后自动恢复
+```
+
+验证：
+
+```bash
+amixer -c "$CARD" sget PCM | grep "Front Left"
+amixer -c "$CARD" sget Mic | grep Mono
+```
+
+以上两项应用后重启程序即可生效。
+
 ## 运行
 
 ```bash
