@@ -51,7 +51,7 @@ class AudioConverter:
                 to_rate,
                 num_channels=to_channels,  # 下混后的声道数
                 dtype="float32",
-                quality="QQ",  # 快速质量（适合实时处理）
+                quality="HQ",  # 上行需强抗混叠，避免高频折叠影响 ASR
             )
             logger.info(f"输入重采样: {from_rate}Hz → {to_rate}Hz")
 
