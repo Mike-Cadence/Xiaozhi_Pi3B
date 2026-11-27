@@ -19,8 +19,10 @@
 - 运行环境：Raspberry Pi 3B + 64 位 Raspberry Pi OS Lite，无 GUI、无摄像头、无物理按键。
 - 音频链路：使用一体式 USB 声卡（UACDemoV1.0 类型），显式指定输入/输出设备，采集增益调整到 60%~70% 以避免波形削顶。
 - 日常运行使用 `gpio` 模式无界面启动，保留 `tui` 模式作为维护/配置通道。
-- 启用 AEC（回声消除），支持语音播报过程中直接插话打断。
+- AEC 默认关闭：本机 USB 声卡的 AEC 消除不干净，开启后会把播报余音送进 ASR（表现为「听见自己说话」）；确需播报中插话再开启，并调整 `AEC_OPTIONS.FRAME_DELAY`。
 - 唤醒链路增加诊断日志（唤醒命中、音频帧中断告警、重连结果），便于排查待命状态唤醒异常。
+- 上行重采样使用 soxr `HQ` 质量（48 kHz → 16 kHz），增强抗混叠，减少高频折叠对云端 ASR 的影响。
+- 唤醒词推理线程数与触发参数针对树莓派 3B 调优（单线程 + 放宽阈值），兼顾 CPU 占用与唤醒灵敏度。
 
 ## 功能特性
 
@@ -89,6 +91,23 @@ aplay -l
 
 USB 声卡建议用 `alsamixer` 将 PCM 采集增益调整到 60%~70%，避免录音削顶导致唤醒词识别率下降。
 
+### 唤醒词与麦克风调优（树莓派 3B）
+
+`WAKE_WORD_OPTIONS` 建议值：
+
+| 配置项 | 建议值 | 说明 |
+| --- | --- | --- |
+| `NUM_THREADS` | 1 | 单线程即可满足实时（RTF ≈ 0.3）；4 核上多线程会过度订阅，反而更慢且 CPU 打满 |
+| `MAX_ACTIVE_PATHS` | 4 | 候选解码路径，越大越不容易漏检 |
+| `KEYWORDS_SCORE` | 1.5 | 关键词加分，越低越容易触发 |
+| `KEYWORDS_THRESHOLD` | 0.15 | 触发阈值，越低越灵敏；若误唤醒明显增多，回调到 0.17~0.18 |
+
+麦克风与电平：
+
+- 采集增益保持 60%~70%（本机为 65%）。实测正常语音 RMS 约 −34 dBFS、峰值 −5.2 dBFS、无削顶，继续提高增益会先削顶。
+- 麦克风距嘴 0.3~0.5 m，避免正对扬声器、避免放在空旷桌面中央（桌面反射会拖尾音）。
+- 若出现「AI 听见自己说话」，通常是 AEC 未对齐（USB 声卡延迟），建议关闭 `AEC_OPTIONS.ENABLED`；确需播报中打断时再逐级调整 `AEC_OPTIONS.FRAME_DELAY`（延迟 ≈ 40 + N × 20 ms）。
+
 ### 树莓派 USB 声卡配置（UACDemoV1.0）
 
 `config.json` 是运行时生成的配置，包含设备激活凭据（`DEVICE_ID`、`CLIENT_ID`、`WEBSOCKET_ACCESS_TOKEN`、`MQTT_INFO` 等），已被 `.gitignore` 排除，**不要提交到仓库**。部署后请手动确认 `AUDIO_DEVICES` 与声卡实际能力一致：
@@ -128,8 +147,13 @@ import json, sys
 p = sys.argv[1]
 d = json.load(open(p))
 
-# 唤醒词推理线程数：树莓派 3B 设为 1，避免 ONNX 线程过度订阅导致 CPU 打满
-d["WAKE_WORD_OPTIONS"]["NUM_THREADS"] = 1
+# 唤醒词推理与触发参数：树莓派 3B 单线程即可实时，阈值放宽提升灵敏度
+d["WAKE_WORD_OPTIONS"].update({
+    "NUM_THREADS": 1,
+    "MAX_ACTIVE_PATHS": 4,
+    "KEYWORDS_SCORE": 1.5,
+    "KEYWORDS_THRESHOLD": 0.15,
+})
 
 # USB 声卡（UACDemoV1.0）采样率与声道，按实际声卡填写
 d["AUDIO_DEVICES"].update({
@@ -141,8 +165,9 @@ d["AUDIO_DEVICES"].update({
     "output_channels": 2,
 })
 
-# 需要「播报中直接插话打断」时开启 AEC
-# d["AEC_OPTIONS"]["ENABLED"] = True
+# AEC 默认关闭：本机开启后 AEC 消除不净，会把播报余音送进 ASR
+# 需要「播报中直接插话打断」时再开启，并调整 AEC_OPTIONS.FRAME_DELAY
+d["AEC_OPTIONS"]["ENABLED"] = False
 
 json.dump(d, open(p, "w"), ensure_ascii=False, indent=2)
 PY
