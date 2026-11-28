@@ -44,8 +44,9 @@ class FbViewManager:
         self._frame_task: Optional[asyncio.Task] = None
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._subscriptions: list[tuple[str, object]] = []
-        # display_text 推送文字的到期时间戳
-        self._display_until = 0.0
+        # 仅在状态变化时重绘；animated 状态（聆听/说话）才周期刷新
+        self._dirty = True
+        self._render_event: Optional[asyncio.Event] = None
 
     # -------------------------
     # ViewPort Protocol
@@ -69,6 +70,7 @@ class FbViewManager:
             return
 
         self._renderer = Renderer()
+        self._render_event = asyncio.Event()
         self._fb.clear()
 
         logger.info(
@@ -153,6 +155,12 @@ class FbViewManager:
         self._state.auto_mode = bool(auto_mode)
         self._request_render()
 
+    def clear_display_text(self) -> None:
+        """清掉常驻的推送文字（用户说出下一句话时调用）."""
+        if self._state.display_text:
+            self._state.display_text = ""
+            self._request_render()
+
     # -------------------------
     # EventBus 订阅
     # -------------------------
@@ -165,13 +173,12 @@ class FbViewManager:
         self._subscriptions.append((Events.DISPLAY_TEXT, self._on_display_text))
 
     async def _on_display_text(self, payload) -> None:
-        """display_text MCP 工具推送的文字：屏上显示 10 秒."""
+        """display_text MCP 工具推送的文字：常驻显示，直到用户说出下一句话."""
         text = payload.get("text", "") if isinstance(payload, dict) else payload
         text = str(text or "").strip()
         if not text:
             return
         self._state.display_text = text
-        self._display_until = time.monotonic() + 10.0
         logger.info("fbdev 显示文字: %r", text)
 
     async def _on_state_changed(self, payload) -> None:
@@ -190,9 +197,10 @@ class FbViewManager:
     # -------------------------
 
     def _request_render(self) -> None:
-        """请求下一帧重绘（渲染循环会处理）."""
-        # 当前实现：渲染循环以固定节拍跑，自动用到最新的 state
-        pass
+        """标记有变化，请求重绘（待机时不周期刷新，省 CPU）."""
+        self._dirty = True
+        if self._render_event is not None:
+            self._render_event.set()
 
     def _render_frame(self, snapshot: UiState) -> None:
         """在工作线程中渲染一帧并写入 /dev/fb0（不占用事件循环）."""
@@ -202,42 +210,47 @@ class FbViewManager:
         self._fb.flush(arr)
 
     async def _render_loop(self, target_fps: float = 15.0) -> None:
-        """固定节拍渲染循环.
+        """事件驱动 + 动画帧率的混合渲染循环.
 
-        Pillow 全屏重绘在 Pi 3B 上约 30 ms，若放在事件循环里会挤占
-        音频采集/唤醒词处理的时间片，因此渲染与写显存交给工作线程。
+        待机/展示文字是静态画面：只在状态变化时渲染一帧，CPU 接近 0；
+        聆听/说话/通知期间才以 15 fps 刷新动画（呼吸圆环）。
+        Pi 3B 单核有限，持续全屏重绘会挤占音频回调，导致唤醒失效。
         """
-        period = 1.0 / target_fps
-        next_t = time.monotonic()
+        ANIMATED = {
+            DeviceState.LISTENING.value,
+            DeviceState.SPEAKING.value,
+            DeviceState.NOTIFYING.value,
+        }
         frame_count = 0
-        last_fps_t = next_t
+        last_fps_t = time.monotonic()
 
         try:
             while self._running:
-                # 推送文字到期后自动恢复圆环
-                if self._state.display_text and time.monotonic() > self._display_until:
-                    self._state.display_text = ""
+                state = self._state
+                animated = state.device_state in ANIMATED
 
-                # 快照 + 线程渲染（避免边画边改，也不阻塞事件循环）
-                snapshot = replace(self._state)
+                # 静态画面且无变化：等待下一次 _request_render()
+                if not animated and not self._dirty:
+                    self._render_event.clear()
+                    try:
+                        await asyncio.wait_for(self._render_event.wait(), timeout=5.0)
+                    except asyncio.TimeoutError:
+                        pass
+                    continue
+
+                self._dirty = False
+                snapshot = replace(state)
                 await asyncio.to_thread(self._render_frame, snapshot)
-
-                # 3. 节拍控制
-                next_t += period
-                sleep_for = next_t - time.monotonic()
-                if sleep_for > 0:
-                    await asyncio.sleep(sleep_for)
-                else:
-                    # 渲染耗时超过 period，跳到下一个边界
-                    next_t = time.monotonic() + period
 
                 frame_count += 1
                 now = time.monotonic()
-                if now - last_fps_t >= 5.0:  # 每 5 秒打一次 fps
-                    fps = frame_count / (now - last_fps_t)
-                    logger.debug("fbdev 渲染 fps=%.1f", fps)
+                if now - last_fps_t >= 5.0:
+                    logger.debug("fbdev 渲染 fps=%.1f", frame_count / (now - last_fps_t))
                     frame_count = 0
                     last_fps_t = now
+
+                if animated:
+                    await asyncio.sleep(1.0 / target_fps)
         except asyncio.CancelledError:
             raise
         except Exception:

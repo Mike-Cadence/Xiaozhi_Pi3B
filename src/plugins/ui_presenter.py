@@ -108,6 +108,11 @@ class UiPresenter:
         msg_type = message.get("type")
         if msg_type in ("tts", "stt"):
             if text := message.get("text"):
+                if msg_type == "stt":
+                    # 用户说出下一句话：清掉常驻的推送大字
+                    clearer = getattr(self._vp, "clear_display_text", None)
+                    if callable(clearer):
+                        clearer()
                 self.set_chat_text(text)
         elif msg_type == "llm":
             if emotion := message.get("emotion"):
