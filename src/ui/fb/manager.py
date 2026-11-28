@@ -47,6 +47,8 @@ class FbViewManager:
         # 仅在状态变化时重绘；animated 状态（聆听/说话）才周期刷新
         self._dirty = True
         self._render_event: Optional[asyncio.Event] = None
+        # 长文本翻页任务
+        self._page_task: Optional[asyncio.Task] = None
 
     # -------------------------
     # ViewPort Protocol
@@ -96,6 +98,11 @@ class FbViewManager:
         self._running = False
 
         # 停止渲染循环
+        page_task = self._page_task
+        self._page_task = None
+        if page_task is not None:
+            page_task.cancel()
+
         task = self._frame_task
         self._frame_task = None
         if task is not None:
@@ -135,13 +142,34 @@ class FbViewManager:
         self._request_render()
 
     def set_chat_text(self, text: str) -> None:
-        self._state.chat_text = text or ""
+        text = text or ""
+        if text != self._state.chat_text:
+            self._state.chat_text = text
+            self._state.chat_page = 0
+            self._restart_chat_paging()
         self._request_render()
+
+    def _restart_chat_paging(self) -> None:
+        """文本变化后重置分页，并启动自动翻页（每 4 秒一页）."""
+        if self._page_task is not None:
+            self._page_task.cancel()
+            self._page_task = None
+        if not self._state.chat_text or self._loop is None:
+            return
+        self._page_task = self._loop.create_task(self._chat_page_loop())
+
+    async def _chat_page_loop(self) -> None:
+        try:
+            while True:
+                await asyncio.sleep(4.0)
+                self._state.chat_page += 1
+                self._request_render()
+        except asyncio.CancelledError:
+            raise
 
     def set_music_line(self, text: str) -> None:
         # fbdev 界面不单独分音乐区，直接写到 chat 区
-        self._state.chat_text = text or ""
-        self._request_render()
+        self.set_chat_text(text)
 
     def set_emotion(self, emotion: str) -> None:
         self._state.emotion = emotion or "neutral"

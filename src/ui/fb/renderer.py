@@ -64,6 +64,7 @@ class UiState:
     device_state: str = DEFAULT_STATE
     status_text: str = "就绪"
     chat_text: str = ""       # STT 转写 / TTS 字幕
+    chat_page: int = 0        # 长文本翻页页码（从 0 开始）
     emotion: str = "neutral"
     auto_mode: bool = False
     connected: bool = True
@@ -278,19 +279,32 @@ class Renderer:
         )
 
     def _draw_text_area(self, d: ImageDraw.ImageDraw, s: UiState) -> None:
-        top = 630
+        top = 516          # 再上移 57 px：170 → 227 → 284 px
         d.line([10, top, W - 10, top], fill=(40, 48, 60), width=1)
 
         d.text(
-            (20, top + 10), s.status_text or "",
-            font=self._font_cjk, fill=TEXT_DIM,
+            (20, top + 8), s.status_text or "",
+            font=self._kai_font(22), fill=TEXT_DIM,
         )
-        chat = (s.chat_text or "")[:38]
-        lines = self._wrap_text(d, chat, W - 40, self._font_cjk)
-        y = top + 42
-        for line in lines[:2]:
-            d.text((20, y), line, font=self._font_cjk, fill=TEXT)
-            y += 32
+
+        # 对话文字：楷体固定字号 + 长文本分页显示（每页 3 行）
+        chat = s.chat_text or ""
+        if chat:
+            FONT_SIZE, LINE_H, LINES_PER_PAGE = 40, 56, 3
+            font = self._kai_font(FONT_SIZE)
+            lines = self._wrap_text(d, chat, W - 40, font)
+            pages = max(1, (len(lines) + LINES_PER_PAGE - 1) // LINES_PER_PAGE)
+            page = s.chat_page % pages
+
+            y = top + 46
+            start = page * LINES_PER_PAGE
+            for line in lines[start:start + LINES_PER_PAGE]:
+                d.text((20, y), line, font=font, fill=TEXT)
+                y += LINE_H
+
+            if pages > 1:
+                d.text((W - 20, top + 8), f"{page + 1}/{pages}",
+                       font=self._font_small, fill=TEXT_DIM, anchor="ra")
 
         mode_text = "自动" if s.auto_mode else "手动"
         d.text((20, H - 28), mode_text, font=self._font_small,
