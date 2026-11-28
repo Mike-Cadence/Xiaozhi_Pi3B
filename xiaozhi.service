@@ -1,0 +1,17 @@
+[Unit]
+Description=Xiaozhi AI assistant (fbdev 480x800 display)
+After=network-online.target sound.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=mikepi
+WorkingDirectory=/home/mikepi/py-xiaozhi
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/home/mikepi/py-xiaozhi/start_pi3b.sh
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target
