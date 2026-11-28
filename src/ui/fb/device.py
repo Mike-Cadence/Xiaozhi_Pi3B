@@ -162,13 +162,28 @@ class FbDevice:
             raise ValueError(
                 f"shape {w}x{h} != fb {self._info.width}x{self._info.height}"
             )
+        row_bytes = w * self._info.bpp // 8
+        if self._info.bpp == 16 and self._info.stride == row_bytes:
+            # 直接写 mmap 的 uint16 视图，省掉两次中间 bytes 拷贝
+            dst = np.frombuffer(self._mmap, dtype="<u2", count=w * h)
+            arr = rgb.astype(np.uint16)
+            packed = (
+                ((arr[..., 0] >> 3) << 11)
+                | ((arr[..., 1] >> 2) << 5)
+                | (arr[..., 2] >> 3)
+            )
+            if self.ROTATE_180:
+                dst[:] = packed[::-1, ::-1].ravel()
+            else:
+                dst[:] = packed.ravel()
+            return
+
         raw = self._rgb_to_framebuffer(rgb)
         if self.ROTATE_180:
             # 180° 等价于像素整体倒序：按 16/32 位元素反转，代价接近一次 memcpy
             dtype = "<u2" if self._info.bpp == 16 else "<u4"
             raw = np.frombuffer(raw, dtype=dtype)[::-1].tobytes()
 
-        row_bytes = self._info.width * self._info.bpp // 8
         if self._info.stride == row_bytes:
             self._mmap[:] = raw
         else:
@@ -179,12 +194,20 @@ class FbDevice:
                 ]
 
     def flush_rect(self, rgb: np.ndarray, x: int, y: int) -> None:
-        """局部 flush：左上角 (x, y)，尺寸由 rgb 数组决定."""
+        """局部 flush：左上角 (x, y)，尺寸由 rgb 数组决定.
+
+        ROTATE_180 时坐标与像素都会做 180° 映射。
+        """
         h, w, _ = rgb.shape
+        if self.ROTATE_180:
+            rgb = rgb[::-1, ::-1]
+            x = self._info.width - x - w
+            y = self._info.height - y - h
         raw = self._rgb_to_framebuffer(rgb)
         row_bytes = w * self._info.bpp // 8
+        bytes_pp = self._info.bpp // 8
         for yy in range(h):
-            off = (y + yy) * self._info.stride + x * self._info.bpp // 8
+            off = (y + yy) * self._info.stride + x * bytes_pp
             self._mmap[off : off + row_bytes] = raw[
                 yy * row_bytes : (yy + 1) * row_bytes
             ]

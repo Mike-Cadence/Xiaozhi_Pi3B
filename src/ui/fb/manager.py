@@ -230,19 +230,28 @@ class FbViewManager:
         if self._render_event is not None:
             self._render_event.set()
 
-    def _render_frame(self, snapshot: UiState) -> None:
-        """在工作线程中渲染一帧并写入 /dev/fb0（不占用事件循环）."""
+    def _render_anim_frame(self, snapshot: UiState) -> None:
+        """只重绘呼吸圆环区域并局部写屏（工作线程内调用）."""
+        if self._renderer is None or self._fb is None:
+            return
+        result = self._renderer.render_ring_frame(snapshot)
+        if result is None:
+            return
+        arr, x, y = result
+        self._fb.flush_rect(arr, x, y)
+
+    def _render_full_frame(self, snapshot: UiState) -> None:
         if self._renderer is None or self._fb is None:
             return
         arr = self._renderer.render(snapshot)
         self._fb.flush(arr)
 
-    async def _render_loop(self, target_fps: float = 15.0) -> None:
-        """事件驱动 + 动画帧率的混合渲染循环.
+    async def _render_loop(self, target_fps: float = 10.0) -> None:
+        """事件驱动 + 局部动画的混合渲染循环.
 
         待机/展示文字是静态画面：只在状态变化时渲染一帧，CPU 接近 0；
-        聆听/说话/通知期间才以 15 fps 刷新动画（呼吸圆环）。
-        Pi 3B 单核有限，持续全屏重绘会挤占音频回调，导致唤醒失效。
+        聆听/说话/通知期间只重绘呼吸圆环区域（约 1/5 屏），
+        避免整屏重绘挤占音频回调导致唤醒/识别失效。
         """
         ANIMATED = {
             DeviceState.LISTENING.value,
@@ -255,7 +264,7 @@ class FbViewManager:
         try:
             while self._running:
                 state = self._state
-                animated = state.device_state in ANIMATED
+                animated = state.device_state in ANIMATED and not state.display_text
 
                 # 静态画面且无变化：等待下一次 _request_render()
                 if not animated and not self._dirty:
@@ -266,9 +275,14 @@ class FbViewManager:
                         pass
                     continue
 
-                self._dirty = False
                 snapshot = replace(state)
-                await asyncio.to_thread(self._render_frame, snapshot)
+                if self._dirty:
+                    # 文字/状态变化：整帧重绘
+                    self._dirty = False
+                    await asyncio.to_thread(self._render_full_frame, snapshot)
+                else:
+                    # 纯动画：只重绘圆环区域
+                    await asyncio.to_thread(self._render_anim_frame, snapshot)
 
                 frame_count += 1
                 now = time.monotonic()

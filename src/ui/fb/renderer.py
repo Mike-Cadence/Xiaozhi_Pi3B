@@ -52,6 +52,16 @@ STATE_ICONS: dict[str, str] = {
 # 默认状态
 DEFAULT_STATE = "idle"
 
+# 呼吸圆环区域：动画只重绘这一块（3B 上全屏重绘会挤占音频回调）
+RING_CX, RING_CY, RING_R = W // 2, 220, 115
+RING_PAD = 16
+RING_BOX = (
+    RING_CX - RING_R - RING_PAD,
+    RING_CY - RING_R - RING_PAD,
+    RING_CX + RING_R + RING_PAD,
+    RING_CY + RING_R + RING_PAD,
+)
+
 
 @dataclass
 class UiState:
@@ -83,6 +93,8 @@ class Renderer:
         self._font_cache: dict[int, ImageFont.ImageFont] = {}
         # 楷体字号缓存（display_text 专用）
         self._kai_cache: dict[int, ImageFont.ImageFont] = {}
+        # 折行结果缓存：避免每帧对长文本逐字 textbbox（3B 上极耗 CPU）
+        self._wrap_cache: dict[tuple, list[str]] = {}
         # 复用画布
         self._img = Image.new("RGB", (W, H), BG)
         self._draw = ImageDraw.Draw(self._img)
@@ -131,6 +143,21 @@ class Renderer:
         self._draw_emotion_area(d, s)
         self._draw_text_area(d, s)
         return np.array(self._img)
+
+    def render_ring_frame(
+        self, s: UiState
+    ) -> Optional[tuple[np.ndarray, int, int]]:
+        """只重绘呼吸圆环区域，返回 (区域图像, x, y)；无圆环时返回 None.
+
+        动画期间（聆听/说话）文字与状态栏都不变，重绘整屏纯属浪费 CPU。
+        """
+        if s.display_text:
+            return None
+        x0, y0, x1, y1 = RING_BOX
+        d = self._draw
+        d.rectangle([x0, y0, x1 - 1, y1 - 1], fill=BG)
+        self._draw_ring(d, s)
+        return np.array(self._img.crop((x0, y0, x1, y1))), x0, y0
 
     # -------------------------
     # 分区绘制
@@ -240,7 +267,7 @@ class Renderer:
         font, size, lines = self._kai_font(30), 30, [text]
         for candidate in (200, 180, 160, 140, 120, 100, 84, 72, 60, 48, 36):
             f = self._kai_font(candidate)
-            wrapped = self._wrap_text(d, text, max_w, f)
+            wrapped = self._wrap_text(d, text, max_w, f, candidate)
             if len(wrapped) * int(candidate * 1.25) <= max_h:
                 font, size, lines = f, candidate, wrapped
                 break
@@ -253,16 +280,11 @@ class Renderer:
                    font=font, fill=ACCENT, anchor="mm")
             y += line_h
 
-    def _draw_emotion_area(self, d: ImageDraw.ImageDraw, s: UiState) -> None:
-        # display_text 优先：有推送文字时替换圆环
-        if s.display_text:
-            self._draw_display_text(d, s.display_text)
-            return
-
-        cx, cy = W // 2, 220
-        r = 115
+    def _draw_ring(self, d: ImageDraw.ImageDraw, s: UiState) -> None:
+        """呼吸圆环（只画环本身，供全屏帧与局部动画帧共用）."""
+        cx, cy = RING_CX, RING_CY
         pulse = 0.9 + 0.1 * np.sin(time.monotonic() * 3)
-        ring_r = int(r * pulse)
+        ring_r = int(RING_R * pulse)
         color = STATE_COLORS.get(s.device_state, TEXT_DIM)
 
         for i, a in enumerate(range(6, 0, -2)):
@@ -278,6 +300,14 @@ class Renderer:
             width=3,
         )
 
+    def _draw_emotion_area(self, d: ImageDraw.ImageDraw, s: UiState) -> None:
+        # display_text 优先：有推送文字时替换圆环
+        if s.display_text:
+            self._draw_display_text(d, s.display_text)
+            return
+
+        self._draw_ring(d, s)
+
     def _draw_text_area(self, d: ImageDraw.ImageDraw, s: UiState) -> None:
         top = 516          # 再上移 57 px：170 → 227 → 284 px
         d.line([10, top, W - 10, top], fill=(40, 48, 60), width=1)
@@ -292,7 +322,7 @@ class Renderer:
         if chat:
             FONT_SIZE, LINE_H, LINES_PER_PAGE = 40, 56, 3
             font = self._kai_font(FONT_SIZE)
-            lines = self._wrap_text(d, chat, W - 40, font)
+            lines = self._wrap_text(d, chat, W - 40, font, FONT_SIZE)
             pages = max(1, (len(lines) + LINES_PER_PAGE - 1) // LINES_PER_PAGE)
             page = s.chat_page % pages
 
@@ -313,12 +343,22 @@ class Renderer:
         d.text((W - 20, H - 28), t, font=self._font_small,
                fill=TEXT_DIM, anchor="ra")
 
-    @staticmethod
     def _wrap_text(
-        d: ImageDraw.ImageDraw, text: str, max_w: int, font: ImageFont.ImageFont
+        self,
+        d: ImageDraw.ImageDraw,
+        text: str,
+        max_w: int,
+        font: ImageFont.ImageFont,
+        size: int = 0,
     ) -> list[str]:
+        """按宽度折行（带缓存：避免每帧对长文本重复测量）."""
         if not text:
             return []
+        key = (text, max_w, size, font.getname() if hasattr(font, "getname") else 0)
+        cached = self._wrap_cache.get(key)
+        if cached is not None:
+            return cached
+
         result: list[str] = []
         line = ""
         for ch in text:
@@ -335,4 +375,8 @@ class Renderer:
                 line = ch
         if line:
             result.append(line)
+
+        if len(self._wrap_cache) > 64:
+            self._wrap_cache.clear()
+        self._wrap_cache[key] = result
         return result
